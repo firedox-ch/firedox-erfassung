@@ -1,4 +1,4 @@
-const CACHE_NAME = 'firedox-erfassung-v1';
+const CACHE_NAME = 'firedox-erfassung-v2';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
@@ -23,7 +23,6 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Skip non-GET requests
   if (event.request.method !== 'GET') return;
 
   // Network first, fallback to cache
@@ -38,4 +37,11 @@ self.addEventListener('fetch', (event) => {
       })
       .catch(() => caches.match(event.request))
   );
+});
+
+// Notify clients when a new version is available
+self.addEventListener('message', (event) => {
+  if (event.data === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });

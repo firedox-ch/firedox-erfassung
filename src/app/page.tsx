@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   db,
   type Liegenschaft,
@@ -15,6 +15,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { v4 as uuid } from "uuid";
 import { exportAsZip, downloadBlob } from "@/lib/export";
 import { generatePDF } from "@/lib/pdf";
+import { importFromZip } from "@/lib/import";
 import {
   Plus,
   Search,
@@ -47,6 +48,7 @@ import {
   Square,
   ChevronDown,
   Edit2,
+  Upload,
 } from "lucide-react";
 
 // --- Constants ---
@@ -114,12 +116,35 @@ export default function Home() {
 
   const activeBegehung = begehungen.find((b) => b.status === "Aktiv") ?? null;
 
-  // Register service worker
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+
+  // Register service worker + detect updates
   useEffect(() => {
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js");
-    }
+    if (!("serviceWorker" in navigator)) return;
+    navigator.serviceWorker.register("/sw.js").then((reg) => {
+      reg.addEventListener("updatefound", () => {
+        const newWorker = reg.installing;
+        if (!newWorker) return;
+        newWorker.addEventListener("statechange", () => {
+          if (newWorker.state === "installed" && navigator.serviceWorker.controller) {
+            setUpdateAvailable(true);
+          }
+        });
+      });
+    });
+    // Also check periodically (every 30min)
+    const interval = setInterval(() => {
+      navigator.serviceWorker.getRegistration().then((reg) => reg?.update());
+    }, 30 * 60 * 1000);
+    return () => clearInterval(interval);
   }, []);
+
+  const applyUpdate = () => {
+    navigator.serviceWorker.getRegistration().then((reg) => {
+      reg?.waiting?.postMessage("SKIP_WAITING");
+    });
+    window.location.reload();
+  };
 
   // --- Handlers ---
   const openLiegenschaft = (id: string) => {
@@ -186,6 +211,16 @@ export default function Home() {
   // ================================================================
   return (
     <div className="max-w-md mx-auto h-[100dvh] bg-gray-50 flex flex-col font-sans text-gray-900 overflow-hidden shadow-2xl border-x border-gray-200 relative">
+      {/* Update Banner */}
+      {updateAvailable && (
+        <div className="bg-blue-600 text-white px-4 py-2 flex items-center justify-between z-50 shrink-0">
+          <span className="text-xs font-bold">Neue Version verfügbar</span>
+          <button onClick={applyUpdate} className="text-xs bg-white text-blue-600 px-3 py-1 rounded-lg font-bold active:scale-95">
+            Jetzt aktualisieren
+          </button>
+        </div>
+      )}
+
       {screen === "list" ? (
         <LiegenschaftList
           liegenschaften={liegenschaften}
@@ -359,6 +394,25 @@ function LiegenschaftList({
   onSelect: (id: string) => void;
 }) {
   const [showAdd, setShowAdd] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<string | null>(null);
+  const importRef = useRef<HTMLInputElement>(null);
+
+  const handleImport = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImporting(true);
+    setImportResult(null);
+    try {
+      const result = await importFromZip(file);
+      setImportResult(`"${result.liegenschaft}" importiert: ${result.assets} Assets, ${result.maengel} Mängel`);
+    } catch (err) {
+      setImportResult(`Fehler: ${err instanceof Error ? err.message : 'Import fehlgeschlagen'}`);
+    } finally {
+      setImporting(false);
+      e.target.value = "";
+    }
+  }, []);
 
   return (
     <>
@@ -371,20 +425,36 @@ function LiegenschaftList({
             Erfassung
           </p>
         </div>
-        <button
-          onClick={() => setShowAdd(true)}
-          className="flex items-center gap-1.5 px-3 py-2 bg-red-600 text-white rounded-xl font-bold text-xs active:scale-95 transition-all shadow-lg shadow-red-200"
-        >
-          <Plus size={16} /> Neue Liegenschaft
-        </button>
+        <div className="flex gap-2">
+          <label className="flex items-center gap-1.5 px-3 py-2 bg-gray-100 text-gray-600 rounded-xl font-bold text-xs cursor-pointer hover:bg-gray-200 transition-colors">
+            <Upload size={14} /> Import
+            <input ref={importRef} type="file" accept=".zip" onChange={handleImport} className="hidden" />
+          </label>
+          <button
+            onClick={() => setShowAdd(true)}
+            className="flex items-center gap-1.5 px-3 py-2 bg-red-600 text-white rounded-xl font-bold text-xs active:scale-95 transition-all shadow-lg shadow-red-200"
+          >
+            <Plus size={16} /> Neu
+          </button>
+        </div>
       </header>
+
+      {/* Import status */}
+      {(importing || importResult) && (
+        <div className={`px-4 py-2 text-xs font-bold shrink-0 ${importing ? "bg-blue-50 text-blue-600" : importResult?.startsWith("Fehler") ? "bg-red-50 text-red-600" : "bg-green-50 text-green-600"}`}>
+          {importing ? "Importiere..." : importResult}
+          {!importing && (
+            <button onClick={() => setImportResult(null)} className="ml-2 underline">OK</button>
+          )}
+        </div>
+      )}
 
       <main className="flex-1 overflow-y-auto hide-scrollbar p-4 space-y-3">
         {liegenschaften.length === 0 ? (
           <div className="text-center text-gray-400 mt-20 space-y-3">
             <Building2 size={48} className="mx-auto text-gray-300" />
             <p className="font-bold">Keine Liegenschaften</p>
-            <p className="text-sm">Erstelle eine neue Liegenschaft um zu starten.</p>
+            <p className="text-sm">Erstelle eine neue Liegenschaft oder importiere ein ZIP.</p>
           </div>
         ) : (
           liegenschaften.map((l) => (
