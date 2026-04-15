@@ -1,4 +1,4 @@
-const CACHE_NAME = 'firedox-erfassung-v3';
+const CACHE_NAME = 'firedox-erfassung-v4';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
