@@ -166,7 +166,7 @@ export async function generatePDF(
   y += 8;
 
   // Status box
-  const boxW = 52;
+  const boxW = isConform ? 52 : 72;
   const boxH = 14;
   const boxX = (pw - boxW) / 2;
   doc.setDrawColor(192, 192, 192);
