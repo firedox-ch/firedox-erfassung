@@ -239,18 +239,18 @@ export default function Home() {
         )}
       </main>
 
-      {/* Bottom Navigation */}
-      <nav className="bg-white border-t border-gray-100 p-2 pb-6 px-4 relative z-20">
-        {/* FAB for adding Mangel */}
-        {currentLiegenschaft && (
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="absolute -top-7 left-1/2 -translate-x-1/2 bg-red-600 text-white p-5 rounded-full shadow-2xl shadow-red-300 border-[6px] border-gray-50 active:scale-90 transition-all z-30"
-          >
-            <Plus size={28} strokeWidth={3} />
-          </button>
-        )}
+      {/* FAB for adding Mangel - floating above toolbar */}
+      {currentLiegenschaft && (
+        <button
+          onClick={() => setShowAddModal(true)}
+          className="absolute bottom-20 right-6 z-30 bg-red-600 text-white p-4 rounded-full shadow-2xl shadow-red-300 active:scale-90 transition-all"
+        >
+          <Plus size={28} strokeWidth={3} />
+        </button>
+      )}
 
+      {/* Bottom Navigation */}
+      <nav className="bg-white border-t border-gray-100 p-2 pb-6 px-6 z-20">
         <div className="flex justify-around items-center">
           <button
             onClick={() => setActiveTab("liegenschaft")}
@@ -267,9 +267,6 @@ export default function Home() {
             <ClipboardCheck size={22} strokeWidth={activeTab === "dashboard" ? 3 : 2} />
             <span className="text-[10px] font-black uppercase">Status</span>
           </button>
-
-          {/* Spacer for FAB */}
-          <div className="w-16" />
 
           <button
             onClick={() => setActiveTab("maengel")}
