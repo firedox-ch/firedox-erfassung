@@ -1069,7 +1069,20 @@ function AddMangelModal({
 function ViewAssetModal({ asset, maengel, onClose, onUpdate }: {
   asset: Asset; maengel: Mangel[]; onClose: () => void; onUpdate: (a: Asset) => void;
 }) {
+  const [editing, setEditing] = useState(false);
   const [fotoIdx, setFotoIdx] = useState(0);
+  const [form, setForm] = useState({
+    typ: asset.typ,
+    bezeichnung: asset.bezeichnung,
+    ort: asset.ort,
+    geschoss: asset.geschoss,
+    status: asset.status,
+    letztePruefung: asset.letztePruefung,
+    naechstePruefung: asset.naechstePruefung,
+    notizen: asset.notizen,
+  });
+  const [fotos, setFotos] = useState(asset.fotos);
+  const [saving, setSaving] = useState(false);
 
   const deleteAsset = async () => {
     if (!confirm("Asset löschen?")) return;
@@ -1077,11 +1090,102 @@ function ViewAssetModal({ asset, maengel, onClose, onUpdate }: {
     onClose();
   };
 
-  const cycleStatus = async () => {
-    const next: AssetStatus = asset.status === "OK" ? "Mangelhaft" : asset.status === "Mangelhaft" ? "Nicht geprüft" : "OK";
-    await db.assets.update(asset.id, { status: next, updatedAt: new Date().toISOString() });
-    onUpdate({ ...asset, status: next });
+  const handlePhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === "string") setFotos((p) => [...p, reader.result as string]);
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = "";
   };
+
+  const saveEdit = async () => {
+    setSaving(true);
+    try {
+      const updated = { ...form, fotos, updatedAt: new Date().toISOString() };
+      await db.assets.update(asset.id, updated);
+      onUpdate({ ...asset, ...updated });
+      setEditing(false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (editing) {
+    return (
+      <BottomSheet onClose={() => setEditing(false)} title="Asset bearbeiten">
+        <div className="space-y-4">
+          <PhotoCapture fotos={fotos} onAdd={handlePhoto} onRemove={(i) => setFotos((p) => p.filter((_, j) => j !== i))} />
+
+          <div>
+            <label className="text-[10px] font-black text-gray-400 uppercase mb-1.5 block tracking-widest">Typ</label>
+            <div className="grid grid-cols-3 gap-2">
+              {ASSET_TYPEN.slice(0, 9).map((t) => (
+                <button key={t} onClick={() => setForm((p) => ({ ...p, typ: t }))}
+                  className={`py-2 px-1 text-[9px] font-bold rounded-xl border transition-all flex flex-col items-center gap-1 ${
+                    form.typ === t ? "bg-red-600 text-white border-red-600 shadow-lg shadow-red-200" : "bg-gray-50 text-gray-500 border-gray-100"
+                  }`}>
+                  {ASSET_ICONS[t]}
+                  {t}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <Field label="Bezeichnung" value={form.bezeichnung} onChange={(v) => setForm((p) => ({ ...p, bezeichnung: v }))}
+            placeholder={`z.B. ${form.typ} EG Eingang`} />
+
+          <div className="grid grid-cols-2 gap-3">
+            <ComboField label="Ort / Bereich *" value={form.ort} onChange={(v) => setForm((p) => ({ ...p, ort: v }))}
+              placeholder="Auswählen..." options={ORT_OPTIONS} icon={<MapPin size={16} className="text-gray-300" />} />
+            <ComboField label="Geschoss" value={form.geschoss} onChange={(v) => setForm((p) => ({ ...p, geschoss: v }))}
+              placeholder="Auswählen..." options={GESCHOSS_OPTIONS} icon={<Layers size={16} className="text-gray-300" />} />
+          </div>
+
+          <div>
+            <label className="text-[10px] font-black text-gray-400 uppercase mb-1.5 block tracking-widest">Status</label>
+            <div className="grid grid-cols-3 gap-2">
+              {(["OK", "Mangelhaft", "Nicht geprüft"] as const).map((s) => (
+                <button key={s} onClick={() => setForm((p) => ({ ...p, status: s }))}
+                  className={`py-2.5 text-[10px] font-black rounded-xl border transition-all ${
+                    form.status === s
+                      ? s === "OK" ? "bg-green-600 text-white border-green-600" :
+                        s === "Mangelhaft" ? "bg-red-600 text-white border-red-600" :
+                        "bg-gray-600 text-white border-gray-600"
+                      : "bg-gray-50 text-gray-400 border-gray-100"
+                  }`}>
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Letzte Prüfung" value={form.letztePruefung} onChange={(v) => setForm((p) => ({ ...p, letztePruefung: v }))} type="date" />
+            <Field label="Nächste Prüfung" value={form.naechstePruefung} onChange={(v) => setForm((p) => ({ ...p, naechstePruefung: v }))} type="date" />
+          </div>
+
+          <div>
+            <label className="text-[10px] font-black text-gray-400 uppercase mb-1.5 block tracking-widest">Notizen</label>
+            <textarea className="w-full bg-gray-50 p-3 rounded-xl outline-none focus:ring-2 focus:ring-red-500 text-sm font-medium border border-transparent min-h-[60px]"
+              value={form.notizen} onChange={(e) => setForm((p) => ({ ...p, notizen: e.target.value }))} />
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button onClick={() => setEditing(false)} className="flex-1 py-4 text-gray-400 font-bold text-sm">Abbrechen</button>
+            <button onClick={saveEdit} disabled={saving || !form.ort}
+              className="flex-[2] py-4 bg-red-600 text-white font-black rounded-2xl shadow-xl shadow-red-200 active:scale-95 transition-all text-sm uppercase tracking-widest disabled:opacity-50 flex items-center justify-center gap-2">
+              <Save size={18} /> {saving ? "Speichere..." : "Speichern"}
+            </button>
+          </div>
+        </div>
+      </BottomSheet>
+    );
+  }
 
   return (
     <BottomSheet onClose={onClose} title={asset.bezeichnung || asset.typ}>
@@ -1111,11 +1215,9 @@ function ViewAssetModal({ asset, maengel, onClose, onUpdate }: {
           </div>
         </div>
 
-        <div className="flex gap-3">
-          <div className="flex-1 bg-gray-50 p-3 rounded-xl">
-            <label className="text-[10px] font-black text-gray-400 uppercase mb-1 block">Ort</label>
-            <p className="text-sm font-bold text-gray-800">{asset.ort}{asset.geschoss ? `, ${asset.geschoss}` : ""}</p>
-          </div>
+        <div className="bg-gray-50 p-3 rounded-xl">
+          <label className="text-[10px] font-black text-gray-400 uppercase mb-1 block">Ort</label>
+          <p className="text-sm font-bold text-gray-800">{asset.ort}{asset.geschoss ? `, ${asset.geschoss}` : ""}</p>
         </div>
 
         {(asset.letztePruefung || asset.naechstePruefung) && (
@@ -1155,12 +1257,12 @@ function ViewAssetModal({ asset, maengel, onClose, onUpdate }: {
         )}
 
         <div className="flex gap-3">
-          <button onClick={deleteAsset} className="flex-1 py-4 bg-gray-100 text-red-500 font-bold rounded-xl text-sm flex items-center justify-center gap-2">
-            <Trash2 size={18} /> Löschen
+          <button onClick={deleteAsset} className="py-4 px-4 bg-gray-100 text-red-500 font-bold rounded-xl text-sm flex items-center justify-center gap-2">
+            <Trash2 size={18} />
           </button>
-          <button onClick={cycleStatus}
-            className="flex-[2] py-4 font-black rounded-xl shadow-lg active:scale-95 transition-all text-sm uppercase tracking-widest flex items-center justify-center gap-2 bg-gray-800 text-white">
-            Status ändern
+          <button onClick={() => setEditing(true)}
+            className="flex-1 py-4 font-black rounded-xl shadow-lg active:scale-95 transition-all text-sm uppercase tracking-widest flex items-center justify-center gap-2 bg-red-600 text-white shadow-red-200">
+            <Edit2 size={18} /> Bearbeiten
           </button>
         </div>
       </div>
