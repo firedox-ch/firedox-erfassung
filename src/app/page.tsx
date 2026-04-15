@@ -88,6 +88,7 @@ export default function Home() {
   const [showAddAsset, setShowAddAsset] = useState(false);
   const [showAddMangel, setShowAddMangel] = useState(false);
   const [showEditLiegenschaft, setShowEditLiegenschaft] = useState(false);
+  const [showStartBegehung, setShowStartBegehung] = useState<"Erstbegehung" | "Kontrollbegehung" | null>(null);
   const [viewAsset, setViewAsset] = useState<Asset | null>(null);
   const [viewMangel, setViewMangel] = useState<Mangel | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -132,19 +133,8 @@ export default function Home() {
     setShowMenu(false);
   };
 
-  const handleStartBegehung = async (typ: "Erstbegehung" | "Kontrollbegehung") => {
-    if (!current) return;
-    await db.begehungen.add({
-      id: uuid(),
-      liegenschaftId: current.id,
-      typ,
-      datum: new Date().toISOString().split("T")[0],
-      pruefer: current.pruefer || "",
-      status: "Aktiv",
-      notizen: "",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    });
+  const handleStartBegehung = (typ: "Erstbegehung" | "Kontrollbegehung") => {
+    setShowStartBegehung(typ);
     setShowMenu(false);
   };
 
@@ -314,6 +304,14 @@ export default function Home() {
         <LiegenschaftFormModal
           liegenschaft={current}
           onClose={() => setShowEditLiegenschaft(false)}
+        />
+      )}
+      {showStartBegehung && current && (
+        <StartBegehungModal
+          typ={showStartBegehung}
+          liegenschaftId={current.id}
+          defaultPruefer={current.pruefer}
+          onClose={() => setShowStartBegehung(null)}
         />
       )}
       {showAddAsset && current && (
@@ -763,6 +761,82 @@ function MaengelTab({
 // ================================================================
 
 // --- Menu Overlay ---
+// --- Start Begehung Modal ---
+function StartBegehungModal({
+  typ,
+  liegenschaftId,
+  defaultPruefer,
+  onClose,
+}: {
+  typ: "Erstbegehung" | "Kontrollbegehung";
+  liegenschaftId: string;
+  defaultPruefer: string;
+  onClose: () => void;
+}) {
+  const [pruefer, setPruefer] = useState(defaultPruefer);
+  const [datum, setDatum] = useState(new Date().toISOString().split("T")[0]);
+  const [notizen, setNotizen] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const start = async () => {
+    if (!pruefer) return;
+    setSaving(true);
+    try {
+      await db.begehungen.add({
+        id: uuid(),
+        liegenschaftId,
+        typ,
+        datum,
+        pruefer,
+        status: "Aktiv",
+        notizen,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <BottomSheet onClose={onClose} title={`${typ} starten`}>
+      <div className="space-y-4">
+        <div className={`p-4 rounded-xl ${typ === "Erstbegehung" ? "bg-blue-50 border border-blue-200" : "bg-green-50 border border-green-200"}`}>
+          <p className="text-sm text-gray-700">
+            {typ === "Erstbegehung"
+              ? "Erstmalige Erfassung aller Brandschutz-Assets und Mängel der Liegenschaft."
+              : "Kontrollbegehung zur Prüfung der bestehenden Assets. Neue Feststellungen werden dieser Begehung zugeordnet."}
+          </p>
+        </div>
+
+        <Field label="Prüfer / Verantwortlicher *" value={pruefer} onChange={setPruefer} placeholder="Name des Prüfers" />
+        <Field label="Datum" value={datum} onChange={setDatum} type="date" />
+        <div>
+          <label className="text-[10px] font-black text-gray-400 uppercase mb-1.5 block tracking-widest">Notizen (optional)</label>
+          <textarea
+            className="w-full bg-gray-50 p-3 rounded-xl outline-none focus:ring-2 focus:ring-red-500 text-sm font-medium border border-transparent min-h-[60px]"
+            placeholder="Anmerkungen zur Begehung..."
+            value={notizen}
+            onChange={(e) => setNotizen(e.target.value)}
+          />
+        </div>
+
+        <div className="flex gap-3 pt-2">
+          <button onClick={onClose} className="flex-1 py-4 text-gray-400 font-bold text-sm">Abbrechen</button>
+          <button
+            onClick={start}
+            disabled={saving || !pruefer}
+            className="flex-[2] py-4 bg-red-600 text-white font-black rounded-2xl shadow-xl shadow-red-200 active:scale-95 transition-all text-sm uppercase tracking-widest disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            <Play size={18} /> {saving ? "Starte..." : "Begehung starten"}
+          </button>
+        </div>
+      </div>
+    </BottomSheet>
+  );
+}
+
 function MenuOverlay({
   onClose, activeBegehung, onStartBegehung, onStopBegehung,
   onExportZip, onExportPDF, onEdit, onDelete, exporting,
