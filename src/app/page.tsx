@@ -240,40 +240,45 @@ export default function Home() {
       </main>
 
       {/* Bottom Navigation */}
-      <nav className="bg-white border-t border-gray-100 p-2 pb-6 px-6 flex justify-between items-center relative z-20">
-        <button
-          onClick={() => setActiveTab("liegenschaft")}
-          className={`flex flex-col items-center gap-1 p-2 transition-all ${activeTab === "liegenschaft" ? "text-red-600 scale-110" : "text-gray-300"}`}
-        >
-          <Building2 size={22} strokeWidth={activeTab === "liegenschaft" ? 3 : 2} />
-          <span className="text-[10px] font-black uppercase">Objekt</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab("dashboard")}
-          className={`flex flex-col items-center gap-1 p-2 transition-all ${activeTab === "dashboard" ? "text-red-600 scale-110" : "text-gray-300"}`}
-        >
-          <ClipboardCheck size={22} strokeWidth={activeTab === "dashboard" ? 3 : 2} />
-          <span className="text-[10px] font-black uppercase">Status</span>
-        </button>
-
+      <nav className="bg-white border-t border-gray-100 p-2 pb-6 px-4 relative z-20">
         {/* FAB for adding Mangel */}
         {currentLiegenschaft && (
           <button
             onClick={() => setShowAddModal(true)}
-            className="absolute -top-7 left-1/2 -translate-x-1/2 bg-red-600 text-white p-5 rounded-full shadow-2xl shadow-red-300 border-[6px] border-gray-50 active:scale-90 transition-all"
+            className="absolute -top-7 left-1/2 -translate-x-1/2 bg-red-600 text-white p-5 rounded-full shadow-2xl shadow-red-300 border-[6px] border-gray-50 active:scale-90 transition-all z-30"
           >
             <Plus size={28} strokeWidth={3} />
           </button>
         )}
 
-        <button
-          onClick={() => setActiveTab("maengel")}
-          className={`flex flex-col items-center gap-1 p-2 transition-all ${activeTab === "maengel" ? "text-red-600 scale-110" : "text-gray-300"}`}
-        >
-          <AlertTriangle size={22} strokeWidth={activeTab === "maengel" ? 3 : 2} />
-          <span className="text-[10px] font-black uppercase">Mängel</span>
-        </button>
+        <div className="flex justify-around items-center">
+          <button
+            onClick={() => setActiveTab("liegenschaft")}
+            className={`flex flex-col items-center gap-1 p-2 transition-all ${activeTab === "liegenschaft" ? "text-red-600 scale-110" : "text-gray-300"}`}
+          >
+            <Building2 size={22} strokeWidth={activeTab === "liegenschaft" ? 3 : 2} />
+            <span className="text-[10px] font-black uppercase">Objekt</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("dashboard")}
+            className={`flex flex-col items-center gap-1 p-2 transition-all ${activeTab === "dashboard" ? "text-red-600 scale-110" : "text-gray-300"}`}
+          >
+            <ClipboardCheck size={22} strokeWidth={activeTab === "dashboard" ? 3 : 2} />
+            <span className="text-[10px] font-black uppercase">Status</span>
+          </button>
+
+          {/* Spacer for FAB */}
+          <div className="w-16" />
+
+          <button
+            onClick={() => setActiveTab("maengel")}
+            className={`flex flex-col items-center gap-1 p-2 transition-all ${activeTab === "maengel" ? "text-red-600 scale-110" : "text-gray-300"}`}
+          >
+            <AlertTriangle size={22} strokeWidth={activeTab === "maengel" ? 3 : 2} />
+            <span className="text-[10px] font-black uppercase">Mängel</span>
+          </button>
+        </div>
       </nav>
 
       {/* Add Mangel Modal */}
