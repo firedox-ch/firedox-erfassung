@@ -289,6 +289,16 @@ export default function Home() {
         )}
       </main>
 
+      {/* FAB */}
+      {(currentLiegenschaft || (selectedId && liegenschaften.length > 0)) && (
+        <button
+          onClick={() => setShowAddModal(true)}
+          className="absolute bottom-[4.5rem] left-1/2 -translate-x-1/2 bg-red-600 text-white p-4 rounded-full shadow-[0_0_20px_rgba(220,38,38,0.5),0_0_40px_rgba(220,38,38,0.25)] border-[5px] border-white active:scale-90 transition-all z-30 hover:shadow-[0_0_25px_rgba(220,38,38,0.6),0_0_50px_rgba(220,38,38,0.3)]"
+        >
+          <Plus size={26} strokeWidth={3} />
+        </button>
+      )}
+
       {/* Bottom Navigation */}
       <nav className="bg-white border-t border-gray-100 p-2 pb-6 px-8 flex justify-between items-center relative z-20">
         <button
@@ -306,16 +316,6 @@ export default function Home() {
           <ClipboardCheck size={22} strokeWidth={activeTab === "dashboard" ? 3 : 2} />
           <span className="text-[10px] font-black uppercase">Status</span>
         </button>
-
-        {/* FAB between Status and Mängel, raised above nav */}
-        {(currentLiegenschaft || (selectedId && liegenschaften.length > 0)) && (
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="absolute -top-20 left-1/2 -translate-x-1/2 bg-red-600 text-white p-5 rounded-full shadow-[0_0_20px_rgba(220,38,38,0.5),0_0_40px_rgba(220,38,38,0.25)] border-[6px] border-white active:scale-90 transition-all z-30 hover:shadow-[0_0_25px_rgba(220,38,38,0.6),0_0_50px_rgba(220,38,38,0.3)]"
-          >
-            <Plus size={28} strokeWidth={3} />
-          </button>
-        )}
 
         <button
           onClick={() => setActiveTab("maengel")}
