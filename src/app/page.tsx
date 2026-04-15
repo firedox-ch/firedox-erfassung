@@ -23,7 +23,42 @@ import {
   ArrowLeft,
   Save,
   Layers,
+  ChevronDown,
 } from "lucide-react";
+
+const ORT_OPTIONS = [
+  "Treppenhaus A",
+  "Treppenhaus B",
+  "Tiefgarage",
+  "Eingangsbereich",
+  "Keller",
+  "Dachboden",
+  "Waschküche",
+  "Heizungsraum",
+  "Technikraum",
+  "Aufzug",
+  "Flur / Korridor",
+  "Wohnung",
+  "Büro",
+  "Lager",
+  "Aussenbreich",
+];
+
+const GESCHOSS_OPTIONS = [
+  "UG2",
+  "UG1",
+  "EG",
+  "1. OG",
+  "2. OG",
+  "3. OG",
+  "4. OG",
+  "5. OG",
+  "6. OG",
+  "7. OG",
+  "8. OG",
+  "DG",
+  "Dach",
+];
 
 type Tab = "dashboard" | "maengel" | "liegenschaft";
 
@@ -257,11 +292,11 @@ export default function Home() {
           <span className="text-[10px] font-black uppercase">Status</span>
         </button>
 
-        {/* FAB centered, raised above nav */}
+        {/* FAB between Status and Mängel, raised above nav */}
         {currentLiegenschaft && (
           <button
             onClick={() => setShowAddModal(true)}
-            className="absolute -top-10 left-1/2 -translate-x-1/2 bg-red-600 text-white p-5 rounded-full shadow-[0_0_20px_rgba(220,38,38,0.5),0_0_40px_rgba(220,38,38,0.25)] border-[6px] border-white active:scale-90 transition-all z-30 hover:shadow-[0_0_25px_rgba(220,38,38,0.6),0_0_50px_rgba(220,38,38,0.3)]"
+            className="absolute -top-20 left-1/2 -translate-x-1/2 bg-red-600 text-white p-5 rounded-full shadow-[0_0_20px_rgba(220,38,38,0.5),0_0_40px_rgba(220,38,38,0.25)] border-[6px] border-white active:scale-90 transition-all z-30 hover:shadow-[0_0_25px_rgba(220,38,38,0.6),0_0_50px_rgba(220,38,38,0.3)]"
           >
             <Plus size={28} strokeWidth={3} />
           </button>
@@ -752,18 +787,20 @@ function AddMangelModal({
           />
 
           <div className="grid grid-cols-2 gap-3">
-            <Field
+            <ComboField
               label="Ort / Bereich *"
               value={form.ort}
               onChange={(v) => setForm((p) => ({ ...p, ort: v }))}
-              placeholder="z.B. Treppenhaus A"
+              placeholder="Auswählen oder tippen..."
+              options={ORT_OPTIONS}
               icon={<MapPin size={16} className="text-gray-300" />}
             />
-            <Field
+            <ComboField
               label="Geschoss"
               value={form.geschoss}
               onChange={(v) => setForm((p) => ({ ...p, geschoss: v }))}
-              placeholder="z.B. 1. OG"
+              placeholder="Auswählen..."
+              options={GESCHOSS_OPTIONS}
               icon={<Layers size={16} className="text-gray-300" />}
             />
           </div>
@@ -979,6 +1016,92 @@ function Field({
           onChange={(e) => onChange(e.target.value)}
         />
       </div>
+    </div>
+  );
+}
+
+function ComboField({
+  label,
+  value,
+  onChange,
+  placeholder,
+  options,
+  icon,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  options: string[];
+  icon?: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const [filter, setFilter] = useState("");
+
+  const filtered = options.filter((o) =>
+    o.toLowerCase().includes((filter || value).toLowerCase())
+  );
+
+  const handleSelect = (opt: string) => {
+    onChange(opt);
+    setFilter("");
+    setOpen(false);
+  };
+
+  const handleInputChange = (v: string) => {
+    onChange(v);
+    setFilter(v);
+    if (!open) setOpen(true);
+  };
+
+  return (
+    <div className="relative">
+      <label className="text-[10px] font-black text-gray-400 uppercase mb-1.5 block tracking-widest">
+        {label}
+      </label>
+      <div className="relative">
+        {icon && <div className="absolute left-3 top-1/2 -translate-y-1/2">{icon}</div>}
+        <input
+          type="text"
+          className={`w-full bg-gray-50 p-3 pr-9 rounded-xl outline-none focus:ring-2 focus:ring-red-500 text-sm font-medium border border-transparent ${icon ? "pl-10" : ""}`}
+          placeholder={placeholder}
+          value={value}
+          onChange={(e) => handleInputChange(e.target.value)}
+          onFocus={() => setOpen(true)}
+        />
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300"
+        >
+          <ChevronDown size={16} className={`transition-transform ${open ? "rotate-180" : ""}`} />
+        </button>
+      </div>
+      {open && (
+        <div className="absolute z-50 w-full mt-1 bg-white rounded-xl shadow-lg border border-gray-100 max-h-48 overflow-y-auto hide-scrollbar">
+          {filtered.length > 0 ? (
+            filtered.map((opt) => (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => handleSelect(opt)}
+                className={`w-full text-left px-4 py-2.5 text-sm hover:bg-red-50 transition-colors ${
+                  value === opt ? "bg-red-50 text-red-600 font-bold" : "text-gray-700"
+                }`}
+              >
+                {opt}
+              </button>
+            ))
+          ) : (
+            <div className="px-4 py-2.5 text-xs text-gray-400">
+              Eigener Wert wird übernommen
+            </div>
+          )}
+        </div>
+      )}
+      {open && (
+        <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+      )}
     </div>
   );
 }

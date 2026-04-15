@@ -2,84 +2,81 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { Liegenschaft, Mangel } from './db';
 
-// Brand colors matching the Brandschutzdossier template
-const GREEN: [number, number, number] = [34, 139, 34];
-const GREEN_LIGHT: [number, number, number] = [240, 255, 240];
-const GREEN_HEADER: [number, number, number] = [45, 140, 60];
-const DARK: [number, number, number] = [33, 33, 33];
-const GRAY: [number, number, number] = [100, 100, 100];
-const LIGHT_GRAY: [number, number, number] = [220, 220, 220];
-const WHITE: [number, number, number] = [255, 255, 255];
+// Colors from the DOCX template
+const TEXT: [number, number, number] = [51, 51, 51];       // #333333
+const GREEN: [number, number, number] = [22, 163, 74];     // #16A34A
+const HEADER_GRAY: [number, number, number] = [89, 89, 89]; // #595959
+const LIGHT_GRAY: [number, number, number] = [166, 166, 166]; // #A6A6A6
+const BLACK: [number, number, number] = [0, 0, 0];
 
-const PRIO_COLORS: Record<string, [number, number, number]> = {
-  Kritisch: [200, 30, 30],
-  Hoch: [220, 120, 20],
-  Mittel: [180, 160, 20],
-  Gering: [34, 139, 34],
-};
-
-const PRIO_BG: Record<string, [number, number, number]> = {
-  Kritisch: [255, 230, 230],
-  Hoch: [255, 243, 224],
-  Mittel: [255, 252, 220],
-  Gering: [230, 255, 230],
-};
+const M = 20; // margin
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function lastY(doc: any): number {
   return doc.lastAutoTable?.finalY ?? 40;
 }
 
-function addPageHeader(doc: jsPDF, liegenschaft: Liegenschaft) {
-  const pw = doc.internal.pageSize.getWidth();
-  // Top green line
-  doc.setFillColor(...GREEN_HEADER);
-  doc.rect(0, 0, pw, 2, 'F');
-  // Header text
-  doc.setFontSize(7);
-  doc.setTextColor(...GRAY);
-  doc.setFont('helvetica', 'normal');
-  doc.text('BRANDSCHUTZDOSSIER', 14, 8);
-  doc.text(
-    `${liegenschaft.name} | ${liegenschaft.begehungsDatum || new Date().toLocaleDateString('de-CH')}`,
-    pw - 14,
-    8,
-    { align: 'right' }
-  );
-  doc.setDrawColor(...LIGHT_GRAY);
-  doc.line(14, 10, pw - 14, 10);
+function pageHeader(doc: jsPDF) {
+  // "BRANDSCHUTZDOSSIER 2026" bold, dark gray
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...HEADER_GRAY);
+  doc.text('BRANDSCHUTZDOSSIER 2026', M, 12);
+  // "Konformität nach BSV 2026" italic below
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'italic');
+  doc.setTextColor(...HEADER_GRAY);
+  doc.text('Konformität nach BSV 2026', M, 17);
 }
 
-function addPageFooter(doc: jsPDF, liegenschaft: Liegenschaft, pageNum: number, totalPages: number) {
+function pageFooter(doc: jsPDF, page: number, total: number) {
   const pw = doc.internal.pageSize.getWidth();
   const ph = doc.internal.pageSize.getHeight();
-  doc.setDrawColor(...LIGHT_GRAY);
-  doc.line(14, ph - 14, pw - 14, ph - 14);
-  doc.setFontSize(7);
-  doc.setTextColor(...GRAY);
-  doc.text(`FireDox | ${liegenschaft.name}`, 14, ph - 8);
-  doc.text(`Seite ${pageNum} / ${totalPages}`, pw - 14, ph - 8, { align: 'right' });
+  doc.setFontSize(8);
+  doc.setTextColor(...LIGHT_GRAY);
+  doc.text(`${page} / ${total}`, pw - M, ph - 10, { align: 'right' });
 }
 
-function sectionTitle(doc: jsPDF, num: number, title: string, y: number): number {
+function section(doc: jsPDF, num: number, title: string, y: number): number {
   const pw = doc.internal.pageSize.getWidth();
-  doc.setFillColor(...GREEN_HEADER);
-  doc.rect(14, y, pw - 28, 8, 'F');
-  doc.setTextColor(...WHITE);
-  doc.setFontSize(10);
+  doc.setFontSize(14);
   doc.setFont('helvetica', 'bold');
-  doc.text(`${num}. ${title}`, 18, y + 5.5);
-  doc.setTextColor(...DARK);
-  return y + 14;
+  doc.setTextColor(...TEXT);
+  doc.text(`${num}. ${title}`, M, y);
+  y += 2;
+  // Thick underline
+  doc.setDrawColor(...TEXT);
+  doc.setLineWidth(0.8);
+  doc.line(M, y, pw - M, y);
+  return y + 6;
 }
 
-function checkPageBreak(doc: jsPDF, y: number, needed: number, liegenschaft: Liegenschaft): number {
-  if (y + needed > doc.internal.pageSize.getHeight() - 25) {
-    doc.addPage();
-    addPageHeader(doc, liegenschaft);
-    return 18;
-  }
-  return y;
+function subSection(doc: jsPDF, num: string, title: string, y: number): number {
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...TEXT);
+  doc.text(`${num} ${title}`, M, y);
+  return y + 7;
+}
+
+function italic(doc: jsPDF, text: string, y: number): number {
+  const pw = doc.internal.pageSize.getWidth();
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'italic');
+  doc.setTextColor(...LIGHT_GRAY);
+  const lines = doc.splitTextToSize(text, pw - M * 2);
+  doc.text(lines, M, y);
+  return y + lines.length * 4 + 3;
+}
+
+function needsPage(doc: jsPDF, y: number, h: number): boolean {
+  return y + h > doc.internal.pageSize.getHeight() - 20;
+}
+
+function newPage(doc: jsPDF): number {
+  doc.addPage();
+  pageHeader(doc);
+  return 26;
 }
 
 export async function generatePDF(
@@ -88,363 +85,391 @@ export async function generatePDF(
 ): Promise<Blob> {
   const doc = new jsPDF('p', 'mm', 'a4');
   const pw = doc.internal.pageSize.getWidth();
+  const cw = pw - M * 2;
   let y = 0;
 
-  // ============================================================
-  // PAGE 1: Cover — Objekt-Klassifizierung & Verantwortung
-  // ============================================================
+  const openMaengel = maengel.filter(m => m.status === 'Offen');
+  const erledigtMaengel = maengel.filter(m => m.status === 'Erledigt');
+  const criticalCount = openMaengel.filter(m => m.prioritaet === 'Kritisch').length;
+  const isConform = criticalCount === 0 && openMaengel.length === 0;
+  const datum = liegenschaft.begehungsDatum || new Date().toLocaleDateString('de-CH');
 
-  // Top green bar
-  doc.setFillColor(...GREEN_HEADER);
-  doc.rect(0, 0, pw, 3, 'F');
+  // ============================================================
+  // PAGE 1: Deckblatt
+  // ============================================================
+  pageHeader(doc);
+  y = 40;
 
-  y = 20;
-  doc.setTextColor(...DARK);
+  // Big title
   doc.setFontSize(24);
   doc.setFont('helvetica', 'bold');
-  doc.text('BRANDSCHUTZDOSSIER', 14, y);
-
+  doc.setTextColor(...BLACK);
+  doc.text('BRANDSCHUTZDOSSIER', pw / 2, y, { align: 'center' });
   y += 8;
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(...GRAY);
-  doc.text('Qualitätssicherung (QSS) nach Brandschutzvorschriften BSV 2026', 14, y);
 
-  y += 12;
-  y = sectionTitle(doc, 1, 'Objekt-Klassifizierung & Verantwortung', y);
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...TEXT);
+  doc.text('Qualitätssicherung (QSS) nach Brandschutzvorschriften 2026', pw / 2, y, { align: 'center' });
+  y += 16;
+
+  // 1. Objekt-Klassifizierung & Verantwortung
+  y = section(doc, 1, 'Objekt-Klassifizierung & Verantwortung', y);
 
   const infoRows = [
-    ['Objekt', liegenschaft.name],
-    ['Adresse', `${liegenschaft.strasse}, ${liegenschaft.plz} ${liegenschaft.ort}`],
-    ['Gebäudeart', liegenschaft.gebaeudeart || '-'],
-    ['Baujahr', liegenschaft.baujahr || '-'],
-    ['Geschosse', liegenschaft.anzahlGeschosse || '-'],
-    ['Einheiten', liegenschaft.anzahlEinheiten || '-'],
-    ['Eigentümer', liegenschaft.eigentuemer || '-'],
-    ['Verwalter', liegenschaft.verwalter || '-'],
-    ['Prüfer', liegenschaft.pruefer || '-'],
+    ['Objekt:', liegenschaft.name + ', ' + liegenschaft.strasse + ', ' + liegenschaft.plz + ' ' + liegenschaft.ort],
+    ['Eigentümerschaft:', liegenschaft.eigentuemer || '-'],
+    ['Bewirtschaftung:', liegenschaft.verwalter || '-'],
+    ['Gebäudeart:', liegenschaft.gebaeudeart || '-'],
+    ['Baujahr / Geschosse:', (liegenschaft.baujahr || '-') + ' / ' + (liegenschaft.anzahlGeschosse || '-') + ' Geschosse'],
+    ['Einheiten:', liegenschaft.anzahlEinheiten || '-'],
+    ['QS-Verantwortlicher:', liegenschaft.pruefer ? `**${liegenschaft.pruefer}**` : '-'],
   ];
+
+  // Top border for table
+  doc.setDrawColor(...TEXT);
+  doc.setLineWidth(0.8);
+  doc.line(M, y, pw - M, y);
+  y += 1;
 
   autoTable(doc, {
     startY: y,
-    body: infoRows,
+    body: infoRows.map(r => [r[0], r[1].replace(/\*\*/g, '')]),
     theme: 'plain',
-    styles: { fontSize: 9, cellPadding: 2.5 },
+    styles: { fontSize: 9, cellPadding: { top: 2.5, bottom: 2.5, left: 4, right: 4 }, textColor: TEXT },
     columnStyles: {
-      0: { fontStyle: 'bold', cellWidth: 35, textColor: GRAY },
-      1: { cellWidth: 'auto', textColor: DARK },
+      0: { fontStyle: 'bold', cellWidth: 45 },
+      1: { cellWidth: 'auto' },
     },
-    margin: { left: 14, right: 14 },
-    alternateRowStyles: { fillColor: [248, 248, 248] },
+    margin: { left: M, right: M },
   });
+  y = lastY(doc);
 
-  y = lastY(doc) + 10;
+  // Bottom border for table
+  doc.setDrawColor(...TEXT);
+  doc.setLineWidth(0.8);
+  doc.line(M, y, pw - M, y);
+  y += 14;
 
-  // Date of inspection
-  doc.setFontSize(9);
-  doc.setTextColor(...GRAY);
-  doc.text(`Datum der Erstbegehung: ${liegenschaft.begehungsDatum || '-'}`, 14, y);
+  // Status der Konformität
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...TEXT);
+  doc.text(`Status der Konformität per ${datum}:`, pw / 2, y, { align: 'center' });
   y += 10;
 
-  // Conformity badge
-  const openCount = maengel.filter(m => m.status === 'Offen').length;
-  const criticalCount = maengel.filter(m => m.prioritaet === 'Kritisch' && m.status === 'Offen').length;
-  const isConform = criticalCount === 0;
-
-  const badgeColor: [number, number, number] = isConform ? GREEN : [200, 30, 30];
-  const badgeBg: [number, number, number] = isConform ? [230, 255, 230] : [255, 230, 230];
-  doc.setFillColor(...badgeBg);
-  doc.setDrawColor(...badgeColor);
-  doc.roundedRect(14, y, 45, 14, 2, 2, 'FD');
-  doc.setTextColor(...badgeColor);
-  doc.setFontSize(12);
+  // KONFORM / NICHT KONFORM box
+  const boxW = 55;
+  const boxH = 14;
+  const boxX = (pw - boxW) / 2;
+  doc.setDrawColor(...TEXT);
+  doc.setLineWidth(0.5);
+  doc.rect(boxX, y, boxW, boxH);
+  doc.setFontSize(18);
   doc.setFont('helvetica', 'bold');
-  doc.text(isConform ? 'KONFORM' : 'NICHT KONFORM', 36.5, y + 9, { align: 'center' });
+  doc.setTextColor(...(isConform ? GREEN : [200, 30, 30] as [number, number, number]));
+  doc.text(isConform ? 'KONFORM' : 'NICHT KONFORM', pw / 2, y + 10, { align: 'center' });
+  y += boxH + 10;
 
-  y += 22;
-
-  // Notes
-  if (liegenschaft.notizen) {
-    doc.setFontSize(8);
-    doc.setTextColor(...GRAY);
-    doc.setFont('helvetica', 'italic');
-    const noteLines = doc.splitTextToSize(
-      `Bemerkung: ${liegenschaft.notizen}`,
-      pw - 28
-    );
-    doc.text(noteLines, 14, y);
-    y += noteLines.length * 3.5 + 5;
-  }
-
-  // ============================================================
-  // PAGE 2: Lebenszyklus Dokumentation (Audit Trail)
-  // ============================================================
-  doc.addPage();
-  addPageHeader(doc, liegenschaft);
-  y = 18;
-
-  y = sectionTitle(doc, 2, 'Lebenszyklus Dokumentation (Audit Trail)', y);
-
+  // Conformity note
   doc.setFontSize(8);
-  doc.setTextColor(...GRAY);
-  doc.text('Zeitliche und qualitätsrelevante Dokumentation aller erfassten Brandschutzmassnahmen.', 14, y);
-  y += 8;
+  doc.setFont('helvetica', 'italic');
+  doc.setTextColor(...(isConform ? GREEN : [200, 30, 30] as [number, number, number]));
+  const conformNote = isConform
+    ? 'Konformitätsnachweis: Das Objekt erfüllt alle brandschutztechnischen Anforderungen gemäss BSV 2026. Die Betriebsbereitschaft ist vollumfänglich gewährleistet.'
+    : `Hinweis: Es bestehen offene Mängel (${openMaengel.length} offen, davon ${criticalCount} kritisch). Die Konformität ist erst nach Behebung aller kritischen Mängel gegeben.`;
+  const noteLines = doc.splitTextToSize(conformNote, cw);
+  doc.text(noteLines, M, y);
 
-  // Audit trail table from maengel
-  if (maengel.length > 0) {
-    const auditRows = maengel.map(m => [
-      new Date(m.createdAt).toLocaleDateString('de-CH'),
-      m.titel,
+  // ============================================================
+  // PAGE 2: Sicherheitskonzept + Lebenszyklus
+  // ============================================================
+  y = newPage(doc);
+
+  // Section 2 - just a placeholder reference
+  y = section(doc, 2, 'Sicherheitskonzept & Pläne (Baulicher Brandschutz)', y);
+  y = italic(doc, 'Grundlage für die Intervention der Feuerwehr und Fluchtwege.', y);
+  doc.setFontSize(8);
+  doc.setTextColor(...LIGHT_GRAY);
+  doc.text('[Pläne und Grundrisse werden separat beigelegt]', M, y);
+  y += 14;
+
+  // Section 3 - Lebenszyklus
+  y = section(doc, 3, 'Lebenszyklus-Dokumentation (Audit Trail)', y);
+  y = italic(doc, 'Nachweis der regelmässigen Instandhaltung gemäss Wartungsintervallen.', y);
+
+  // 3.1 Mängel-Historie
+  y = subSection(doc, '3.1', 'Mängel-Historie (Gelebte Qualitätssicherung)', y);
+
+  if (erledigtMaengel.length > 0) {
+    const historyRows = erledigtMaengel.map(m => [
       m.ort + (m.geschoss ? ` (${m.geschoss})` : ''),
-      m.prioritaet,
-      m.status,
+      m.titel,
+      new Date(m.updatedAt).toLocaleDateString('de-CH'),
+      'Erledigt \u2713',
     ]);
 
     autoTable(doc, {
       startY: y,
-      head: [['Datum', 'Massnahme / Feststellung', 'Ort', 'Priorität', 'Status']],
-      body: auditRows,
+      head: [['Bereich', 'Behobener Mangel', 'Behoben am', 'Status']],
+      body: historyRows,
       theme: 'grid',
-      styles: { fontSize: 8, cellPadding: 3 },
-      headStyles: { fillColor: GREEN_HEADER, textColor: WHITE, fontStyle: 'bold' },
-      alternateRowStyles: { fillColor: [248, 252, 248] },
+      styles: { fontSize: 8, cellPadding: 3, textColor: TEXT },
+      headStyles: { fillColor: [245, 245, 245], textColor: TEXT, fontStyle: 'bold' },
       columnStyles: {
-        0: { cellWidth: 22 },
-        1: { cellWidth: 'auto' },
-        2: { cellWidth: 35 },
+        0: { cellWidth: 30 },
+        2: { cellWidth: 25 },
         3: { cellWidth: 22 },
-        4: { cellWidth: 20 },
       },
-      margin: { left: 14, right: 14 },
+      margin: { left: M, right: M },
       didParseCell: (data) => {
         if (data.column.index === 3 && data.section === 'body') {
-          const prio = data.cell.raw as string;
-          const color = PRIO_COLORS[prio];
-          if (color) {
-            data.cell.styles.textColor = color;
-            data.cell.styles.fontStyle = 'bold';
-          }
-        }
-        if (data.column.index === 4 && data.section === 'body') {
-          const status = data.cell.raw as string;
-          data.cell.styles.textColor = status === 'Offen' ? [200, 30, 30] : [34, 139, 34];
+          data.cell.styles.textColor = GREEN;
           data.cell.styles.fontStyle = 'bold';
         }
       },
     });
-
     y = lastY(doc) + 10;
   } else {
     doc.setFontSize(9);
-    doc.setTextColor(...GRAY);
-    doc.text('Keine Einträge vorhanden.', 14, y);
+    doc.setTextColor(...LIGHT_GRAY);
+    doc.text('Keine behobenen Mängel dokumentiert.', M, y);
     y += 10;
   }
 
   // ============================================================
-  // PAGE 3: Prüfbericht & Fotodokumentation
+  // Section 4: Prüfbericht & Fotodokumentation
   // ============================================================
-  doc.addPage();
-  addPageHeader(doc, liegenschaft);
-  y = 18;
+  if (needsPage(doc, y, 50)) y = newPage(doc);
 
-  y = sectionTitle(doc, 3, 'Prüfbericht & Fotodokumentation', y);
-
-  for (const mangel of maengel) {
-    y = checkPageBreak(doc, y, 70, liegenschaft);
-
-    // Mangel header box
-    const prioColor = PRIO_COLORS[mangel.prioritaet] || DARK;
-    const prioBg = PRIO_BG[mangel.prioritaet] || [245, 245, 245];
-
-    doc.setFillColor(...prioBg);
-    doc.setDrawColor(...prioColor);
-    doc.roundedRect(14, y, pw - 28, 8, 1, 1, 'FD');
-    doc.setTextColor(...prioColor);
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'bold');
-    doc.text(`${mangel.prioritaet.toUpperCase()} | ${mangel.titel}`, 18, y + 5.5);
-    y += 12;
-
-    // Details
-    doc.setTextColor(...DARK);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.text(`Ort: ${mangel.ort}${mangel.geschoss ? ` | Geschoss: ${mangel.geschoss}` : ''}`, 14, y);
-    y += 4;
-    doc.text(`Status: ${mangel.status} | Erfasst: ${new Date(mangel.createdAt).toLocaleDateString('de-CH')}`, 14, y);
-    y += 5;
-
-    if (mangel.beschreibung) {
-      doc.setTextColor(...GRAY);
-      const lines = doc.splitTextToSize(mangel.beschreibung, pw - 28);
-      doc.text(lines, 14, y);
-      y += lines.length * 3.5 + 3;
-    }
-
-    // Photos - side by side (2 per row)
-    if (mangel.fotos.length > 0) {
-      const photoWidth = 80;
-      const photoHeight = 55;
-
-      for (let i = 0; i < mangel.fotos.length; i += 2) {
-        y = checkPageBreak(doc, y, photoHeight + 10, liegenschaft);
-
-        // Left photo
-        try {
-          doc.addImage(mangel.fotos[i], 'JPEG', 14, y, photoWidth, photoHeight);
-        } catch {
-          doc.setFillColor(240, 240, 240);
-          doc.rect(14, y, photoWidth, photoHeight, 'F');
-          doc.setFontSize(7);
-          doc.setTextColor(...GRAY);
-          doc.text(`[Foto ${i + 1}]`, 54, y + photoHeight / 2, { align: 'center' });
-        }
-
-        // Right photo
-        if (i + 1 < mangel.fotos.length) {
-          try {
-            doc.addImage(mangel.fotos[i + 1], 'JPEG', pw / 2 + 2, y, photoWidth, photoHeight);
-          } catch {
-            doc.setFillColor(240, 240, 240);
-            doc.rect(pw / 2 + 2, y, photoWidth, photoHeight, 'F');
-          }
-        }
-
-        y += photoHeight + 5;
-      }
-    }
-
-    y += 5;
-  }
+  y = section(doc, 4, 'Prüfbericht & Fotodokumentation', y);
+  y = italic(doc, 'Detaillierte Auflistung der Feststellungen.', y);
 
   if (maengel.length === 0) {
     doc.setFontSize(9);
-    doc.setTextColor(...GRAY);
-    doc.text('Keine Mängel bei der Begehung festgestellt.', 14, y);
+    doc.setTextColor(...LIGHT_GRAY);
+    doc.text('Keine Feststellungen bei der Begehung dokumentiert.', M, y);
+    y += 10;
+  }
+
+  for (let idx = 0; idx < maengel.length; idx++) {
+    const mangel = maengel[idx];
+
+    if (needsPage(doc, y, 65)) y = newPage(doc);
+
+    // Separator line
+    doc.setDrawColor(200, 200, 200);
+    doc.setLineWidth(0.3);
+    doc.line(M, y, pw - M, y);
+    y += 6;
+
+    const statusColor = mangel.status === 'Offen' ? [200, 30, 30] as [number, number, number] : GREEN;
+    const statusLabel = mangel.status === 'Offen' ? 'Offen' : 'OK';
+
+    // ID line: "ID: #M-001 | Standort: ..."   "Status: OK"
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...TEXT);
+    doc.text(`ID: #M-${String(idx + 1).padStart(3, '0')}`, M, y);
+
+    doc.setFont('helvetica', 'normal');
+    doc.text(`| Standort: ${mangel.ort}${mangel.geschoss ? ', ' + mangel.geschoss : ''}`, M + 25, y);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...statusColor);
+    doc.text(`Status: ${statusLabel}`, pw - M, y, { align: 'right' });
+    y += 8;
+
+    // Layout: text left, photo right
+    const hasPhoto = mangel.fotos.length > 0 && mangel.fotos[0];
+    const textW = hasPhoto ? cw - 58 : cw;
+    const photoStartY = y;
+
+    // Feststellung
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...TEXT);
+    doc.text('Feststellung:', M, y);
+    y += 5;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    const festText = mangel.titel + (mangel.beschreibung ? '. ' + mangel.beschreibung : '');
+    const festLines = doc.splitTextToSize(festText, textW);
+    doc.text(festLines, M, y);
+    y += festLines.length * 3.5 + 4;
+
+    // Priority + Date
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...TEXT);
+    doc.text('Priorität: ', M, y);
+    const prioX = M + doc.getTextWidth('Priorität: ');
+    const prioColor = mangel.prioritaet === 'Kritisch' ? [200, 30, 30] as [number, number, number]
+      : mangel.prioritaet === 'Hoch' ? [220, 120, 20] as [number, number, number]
+      : TEXT;
+    doc.setTextColor(...prioColor);
+    doc.text(mangel.prioritaet, prioX, y);
+    doc.setTextColor(...LIGHT_GRAY);
+    doc.setFont('helvetica', 'normal');
+    doc.text(` | Erfasst: ${new Date(mangel.createdAt).toLocaleDateString('de-CH')}`, prioX + doc.getTextWidth(mangel.prioritaet), y);
+
+    // Photo on the right
+    let photoEndY = y;
+    if (hasPhoto) {
+      const photoX = pw - M - 52;
+      const photoW = 52;
+      const photoH = 40;
+      try {
+        doc.addImage(mangel.fotos[0], 'JPEG', photoX, photoStartY, photoW, photoH);
+        photoEndY = photoStartY + photoH + 2;
+      } catch {
+        // Skip
+      }
+    }
+
+    y = Math.max(y + 6, photoEndY + 4);
   }
 
   // ============================================================
-  // PAGE 4: Mängelliste (Übersicht) + Empfehlung
+  // Section 5: Mängelliste (Übersicht)
   // ============================================================
-  doc.addPage();
-  addPageHeader(doc, liegenschaft);
-  y = 18;
+  y = newPage(doc);
 
-  y = sectionTitle(doc, 4, 'Mängelliste (Übersicht)', y);
+  y = section(doc, 5, 'Mängelliste (Übersicht)', y);
+  y = italic(doc, 'Zusammenfassung aller offenen Punkte.', y);
 
-  if (maengel.length > 0) {
-    const tableData = maengel.map((m, i) => [
+  if (openMaengel.length === 0) {
+    // Bordered box with "Keine offenen Mängel"
+    doc.setDrawColor(...TEXT);
+    doc.setLineWidth(0.3);
+    doc.rect(M, y, cw, 8);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...GREEN);
+    doc.text('Keine offenen Mängel festgestellt.', pw / 2, y + 5.5, { align: 'center' });
+    y += 12;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(...TEXT);
+    doc.text('Alle geprüften Bereiche entsprechen den gesetzlichen Vorgaben.', pw / 2, y, { align: 'center' });
+    y += 12;
+  } else {
+    const tableData = openMaengel.map((m, i) => [
       String(i + 1),
       m.titel,
       m.ort + (m.geschoss ? ` (${m.geschoss})` : ''),
       m.prioritaet,
       m.status,
-      m.fotos.length > 0 ? `${m.fotos.length}` : '-',
     ]);
 
     autoTable(doc, {
       startY: y,
-      head: [['#', 'Mangel', 'Ort', 'Priorität', 'Status', 'Fotos']],
+      head: [['#', 'Mangel', 'Ort', 'Priorität', 'Status']],
       body: tableData,
       theme: 'grid',
-      styles: { fontSize: 8, cellPadding: 3 },
-      headStyles: { fillColor: GREEN_HEADER, textColor: WHITE, fontStyle: 'bold' },
-      alternateRowStyles: { fillColor: [248, 252, 248] },
+      styles: { fontSize: 8, cellPadding: 3, textColor: TEXT },
+      headStyles: { fillColor: [245, 245, 245], textColor: TEXT, fontStyle: 'bold' },
       columnStyles: {
         0: { cellWidth: 10, halign: 'center' },
         1: { cellWidth: 'auto' },
         2: { cellWidth: 35 },
         3: { cellWidth: 22 },
         4: { cellWidth: 20 },
-        5: { cellWidth: 14, halign: 'center' },
       },
-      margin: { left: 14, right: 14 },
+      margin: { left: M, right: M },
       didParseCell: (data) => {
         if (data.column.index === 3 && data.section === 'body') {
-          const prio = data.cell.raw as string;
-          const color = PRIO_COLORS[prio];
-          if (color) {
-            data.cell.styles.textColor = color;
-            data.cell.styles.fontStyle = 'bold';
-          }
+          const p = data.cell.raw as string;
+          if (p === 'Kritisch') data.cell.styles.textColor = [200, 30, 30];
+          else if (p === 'Hoch') data.cell.styles.textColor = [220, 120, 20];
+          data.cell.styles.fontStyle = 'bold';
         }
         if (data.column.index === 4 && data.section === 'body') {
-          const status = data.cell.raw as string;
-          data.cell.styles.textColor = status === 'Offen' ? [200, 30, 30] : [34, 139, 34];
+          data.cell.styles.textColor = [200, 30, 30];
         }
       },
     });
-
     y = lastY(doc) + 12;
   }
 
-  // Summary box
-  y = checkPageBreak(doc, y, 40, liegenschaft);
-  y = sectionTitle(doc, 5, 'Periodische Überwachungsempfehlung', y);
+  // ============================================================
+  // Section 6: Periodische Übereinstimmungserklärung
+  // ============================================================
+  if (needsPage(doc, y, 65)) y = newPage(doc);
 
-  doc.setFontSize(9);
-  doc.setTextColor(...DARK);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Zusammenfassung:', 14, y);
-  y += 5;
-  doc.setFont('helvetica', 'normal');
+  y = section(doc, 6, 'Periodische Übereinstimmungserklärung', y);
+  y += 2;
+
+  // Declaration box
+  doc.setDrawColor(...TEXT);
+  doc.setLineWidth(0.3);
+
   doc.setFontSize(8);
-  doc.setTextColor(...GRAY);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...TEXT);
+  const declText = 'Hiermit wird bestätigt, dass der Zustand der geprüften brandschutztechnischen Einrichtungen und baulichen Massnahmen aufgenommen wurde.';
+  const declLines = doc.splitTextToSize(declText, cw - 10);
+  doc.rect(M, y, cw, declLines.length * 4 + 6);
+  doc.text(declLines, M + 5, y + 5);
+  y += declLines.length * 4 + 12;
 
-  const summaryLines = [
-    `Die gesamthafte Brandschutzbeurteilung der Liegenschaft "${liegenschaft.name}" wurde am ${liegenschaft.begehungsDatum || '-'} durchgeführt.`,
-    `Es wurden insgesamt ${maengel.length} Feststellung(en) dokumentiert, davon ${openCount} offen${criticalCount > 0 ? ` (${criticalCount} kritisch)` : ''}.`,
-    '',
-    `Empfehlung: ${criticalCount > 0 ? 'Es müssen umgehend Massnahmen zur Behebung der kritischen Mängel eingeleitet werden.' : openCount > 0 ? 'Die offenen Mängel sollten zeitnah behoben und nachkontrolliert werden.' : 'Keine unmittelbaren Massnahmen erforderlich. Nächste periodische Kontrolle gemäss BSV-Richtlinien.'}`,
-  ];
+  // Ergebnis
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...GREEN);
+  doc.text('Ergebnis: ', M, y);
+  const erX = M + doc.getTextWidth('Ergebnis: ');
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...TEXT);
+  const erText = isConform
+    ? 'Die Anlagen entsprechen den Vorschriften und dem bewilligten Brandschutzkonzept. Die periodische Sicherheitsüberprüfung wurde erfolgreich abgeschlossen.'
+    : `Es bestehen ${openMaengel.length} offene Mängel. Die Konformität wird nach Behebung aller Mängel erneut geprüft.`;
+  const erLines = doc.splitTextToSize(erText, cw - (erX - M));
 
-  for (const line of summaryLines) {
-    if (line === '') { y += 3; continue; }
-    const wrapped = doc.splitTextToSize(line, pw - 28);
-    doc.text(wrapped, 14, y);
-    y += wrapped.length * 3.5 + 2;
+  // If first line fits next to "Ergebnis:", rest below
+  if (erLines.length > 0) {
+    doc.text(erLines[0], erX, y);
+    if (erLines.length > 1) {
+      doc.text(erLines.slice(1), M, y + 4);
+      y += 4 + (erLines.length - 1) * 4;
+    }
   }
+  y += 18;
 
-  y += 12;
+  // Signature lines
+  if (needsPage(doc, y, 25)) y = newPage(doc);
 
-  // Signature section
-  y = checkPageBreak(doc, y, 40, liegenschaft);
+  doc.setDrawColor(...TEXT);
+  doc.setLineWidth(0.3);
+  doc.line(M, y, M + 65, y);
+  doc.line(pw / 2 + 10, y, pw - M, y);
 
-  doc.setTextColor(...DARK);
   doc.setFontSize(8);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Bestätigung', 14, y);
-  y += 8;
-
-  doc.setDrawColor(...DARK);
-  doc.line(14, y + 12, 85, y + 12);
-  doc.line(110, y + 12, pw - 14, y + 12);
-
+  doc.setTextColor(...TEXT);
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7);
-  doc.setTextColor(...GRAY);
-  doc.text('Unterschrift Prüfer', 14, y + 17);
-  doc.text('Datum', 110, y + 17);
+  doc.text('Ort, Datum', M, y + 5);
+  doc.text('Unterschrift QS-Verantwortlicher', pw / 2 + 10, y + 5);
+  doc.setTextColor(...LIGHT_GRAY);
+  doc.text(`(${liegenschaft.ort || '...'}, ${datum})`, M, y + 10);
+  doc.text('(Verwaltung / Eigentümerschaft)', pw / 2 + 10, y + 10);
+  y += 20;
 
-  y += 28;
-  doc.setDrawColor(...DARK);
-  doc.line(14, y, 85, y);
-  doc.line(110, y, pw - 14, y);
-  doc.text('Unterschrift Eigentümer / Verwalter', 14, y + 5);
-  doc.text('Datum', 110, y + 5);
+  // Legal footer
+  doc.setFontSize(6);
+  doc.setFont('helvetica', 'italic');
+  doc.setTextColor(160, 160, 160);
+  const legal = 'Digitales Original. Revisionssicher archiviert gemäss BSV 2026 / QSS-Lifecycle-Nachweis. Die in FireDox erfassten Daten entsprechen formal den Dokumentationsanforderungen der BSV 2026. Die inhaltliche Richtigkeit der Eingaben obliegt dem unterzeichnenden QS-Verantwortlichen.';
+  const legalLines = doc.splitTextToSize(legal, cw);
+  doc.text(legalLines, M, y);
 
   // ============================================================
-  // Add headers & footers to all pages
+  // Footers on all pages
   // ============================================================
-  const totalPages = doc.getNumberOfPages();
-  for (let i = 2; i <= totalPages; i++) {
+  const total = doc.getNumberOfPages();
+  for (let i = 1; i <= total; i++) {
     doc.setPage(i);
-    // Header already added per page (except page 1 which has its own)
-  }
-  for (let i = 1; i <= totalPages; i++) {
-    doc.setPage(i);
-    addPageFooter(doc, liegenschaft, i, totalPages);
+    pageFooter(doc, i, total);
   }
 
   return doc.output('blob');
