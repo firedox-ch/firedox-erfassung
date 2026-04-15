@@ -1,6 +1,6 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import type { Liegenschaft, Mangel } from './db';
+import type { Liegenschaft, Mangel, Asset, Begehung } from './db';
 
 // Colors from the DOCX template
 const TEXT: [number, number, number] = [51, 51, 51];       // #333333
@@ -81,7 +81,9 @@ function newPage(doc: jsPDF): number {
 
 export async function generatePDF(
   liegenschaft: Liegenschaft,
-  maengel: Mangel[]
+  maengel: Mangel[],
+  assets: Asset[] = [],
+  begehungen: Begehung[] = []
 ): Promise<Blob> {
   const doc = new jsPDF('p', 'mm', 'a4');
   const pw = doc.internal.pageSize.getWidth();
@@ -92,7 +94,7 @@ export async function generatePDF(
   const erledigtMaengel = maengel.filter(m => m.status === 'Erledigt');
   const criticalCount = openMaengel.filter(m => m.prioritaet === 'Kritisch').length;
   const isConform = criticalCount === 0 && openMaengel.length === 0;
-  const datum = liegenschaft.begehungsDatum || new Date().toLocaleDateString('de-CH');
+  const datum = begehungen[0]?.datum || new Date().toLocaleDateString('de-CH');
 
   // ============================================================
   // PAGE 1: Deckblatt
@@ -198,8 +200,50 @@ export async function generatePDF(
   y = section(doc, 3, 'Lebenszyklus-Dokumentation (Audit Trail)', y);
   y = italic(doc, 'Nachweis der regelmässigen Instandhaltung gemäss Wartungsintervallen.', y);
 
-  // 3.1 Mängel-Historie
-  y = subSection(doc, '3.1', 'Mängel-Historie (Gelebte Qualitätssicherung)', y);
+  // 3.1 Wartungs-Logbuch (Assets)
+  if (assets.length > 0) {
+    y = subSection(doc, '3.1', 'Wartungs-Logbuch (Technischer Brandschutz)', y);
+
+    const assetRows = assets.map(a => [
+      a.typ,
+      a.bezeichnung || a.typ,
+      a.ort + (a.geschoss ? ` (${a.geschoss})` : ''),
+      a.letztePruefung || '-',
+      a.naechstePruefung || '-',
+      a.status,
+    ]);
+
+    autoTable(doc, {
+      startY: y,
+      head: [['Typ', 'Bezeichnung', 'Ort', 'Letzte Prüfung', 'Nächste', 'Status']],
+      body: assetRows,
+      theme: 'grid',
+      styles: { fontSize: 7, cellPadding: 2.5, textColor: TEXT },
+      headStyles: { fillColor: [245, 245, 245], textColor: TEXT, fontStyle: 'bold' },
+      columnStyles: {
+        0: { cellWidth: 22 },
+        1: { cellWidth: 'auto' },
+        2: { cellWidth: 28 },
+        3: { cellWidth: 22 },
+        4: { cellWidth: 18 },
+        5: { cellWidth: 18 },
+      },
+      margin: { left: M, right: M },
+      didParseCell: (data) => {
+        if (data.column.index === 5 && data.section === 'body') {
+          const s = data.cell.raw as string;
+          if (s === 'OK') { data.cell.styles.textColor = GREEN; data.cell.styles.fontStyle = 'bold'; }
+          else if (s === 'Mangelhaft') { data.cell.styles.textColor = [200, 30, 30]; data.cell.styles.fontStyle = 'bold'; }
+        }
+      },
+    });
+    y = lastY(doc) + 10;
+
+    if (needsPage(doc, y, 20)) y = newPage(doc);
+  }
+
+  // 3.2 Mängel-Historie
+  y = subSection(doc, assets.length > 0 ? '3.2' : '3.1', 'Mängel-Historie (Gelebte Qualitätssicherung)', y);
 
   if (erledigtMaengel.length > 0) {
     const historyRows = erledigtMaengel.map(m => [
