@@ -1008,6 +1008,7 @@ function AddAssetModal({
     naechstePruefung: "",
     notizen: "",
   });
+  const [mangelBeschreibung, setMangelBeschreibung] = useState("");
   const [fotos, setFotos] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
@@ -1028,8 +1029,10 @@ function AddAssetModal({
     if (!form.ort) return;
     setSaving(true);
     try {
+      const assetId = uuid();
+      const now = new Date().toISOString();
       await db.assets.add({
-        id: uuid(),
+        id: assetId,
         liegenschaftId,
         begehungId,
         typ: form.typ,
@@ -1041,9 +1044,27 @@ function AddAssetModal({
         letztePruefung: form.letztePruefung,
         naechstePruefung: form.naechstePruefung,
         notizen: form.notizen,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        createdAt: now,
+        updatedAt: now,
       });
+      // Auto-create Mangel if status is Mangelhaft
+      if (form.status === "Mangelhaft" && mangelBeschreibung) {
+        await db.maengel.add({
+          id: uuid(),
+          liegenschaftId,
+          begehungId,
+          assetId,
+          titel: `${form.bezeichnung || form.typ}: Mangel festgestellt`,
+          beschreibung: mangelBeschreibung,
+          ort: form.ort,
+          geschoss: form.geschoss,
+          prioritaet: "Hoch",
+          status: "Offen",
+          fotos,
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
       onClose();
     } finally {
       setSaving(false);
@@ -1097,6 +1118,22 @@ function AddAssetModal({
             ))}
           </div>
         </div>
+
+        {/* Mangel-Beschreibung wenn Status Mangelhaft */}
+        {form.status === "Mangelhaft" && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4 space-y-3">
+            <p className="text-xs font-bold text-red-700">Mangel wird automatisch in der Mängelliste erfasst</p>
+            <div>
+              <label className="text-[10px] font-black text-red-400 uppercase mb-1.5 block tracking-widest">Mangelbeschreibung</label>
+              <textarea
+                className="w-full bg-white p-3 rounded-xl outline-none focus:ring-2 focus:ring-red-500 text-sm font-medium border border-red-200 min-h-[60px]"
+                placeholder="Was genau ist der Mangel?"
+                value={mangelBeschreibung}
+                onChange={(e) => setMangelBeschreibung(e.target.value)}
+              />
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-3">
           <Field label="Letzte Prüfung" value={form.letztePruefung} onChange={(v) => setForm((p) => ({ ...p, letztePruefung: v }))} type="date" />
