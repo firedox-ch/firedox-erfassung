@@ -16,6 +16,7 @@ import { v4 as uuid } from "uuid";
 import { exportAsZip, downloadBlob } from "@/lib/export";
 import { generatePDF } from "@/lib/pdf";
 import { importFromZip } from "@/lib/import";
+import { saveAssetWithMangel } from "@/lib/assets";
 import {
   Plus,
   Search,
@@ -1115,14 +1116,11 @@ function AddAssetModal({
     if (!form.ort) return;
     setSaving(true);
     try {
-      const assetId = uuid();
-      const now = new Date().toISOString();
-      await db.assets.add({
-        id: assetId,
+      await saveAssetWithMangel({
         liegenschaftId,
         begehungId,
         typ: form.typ,
-        bezeichnung: form.bezeichnung || form.typ,
+        bezeichnung: form.bezeichnung,
         ort: form.ort,
         geschoss: form.geschoss,
         status: form.status,
@@ -1130,27 +1128,8 @@ function AddAssetModal({
         letztePruefung: form.letztePruefung,
         naechstePruefung: form.naechstePruefung,
         notizen: form.notizen,
-        createdAt: now,
-        updatedAt: now,
+        mangelBeschreibung,
       });
-      // Auto-create Mangel if status is Mangelhaft
-      if (form.status === "Mangelhaft" && mangelBeschreibung) {
-        await db.maengel.add({
-          id: uuid(),
-          liegenschaftId,
-          begehungId,
-          assetId,
-          titel: `${form.bezeichnung || form.typ}: Mangel festgestellt`,
-          beschreibung: mangelBeschreibung,
-          ort: form.ort,
-          geschoss: form.geschoss,
-          prioritaet: "Hoch",
-          status: "Offen",
-          fotos,
-          createdAt: now,
-          updatedAt: now,
-        });
-      }
       onClose();
     } finally {
       setSaving(false);
