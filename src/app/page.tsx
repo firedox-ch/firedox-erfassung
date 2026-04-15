@@ -97,7 +97,8 @@ export default function Home() {
 
   // Auto-select first Liegenschaft if none selected
   useEffect(() => {
-    if (!selectedId && liegenschaften.length > 0 && !editingNew) {
+    if (editingNew || selectedId) return;
+    if (liegenschaften.length > 0) {
       setSelectedId(liegenschaften[0].id);
     }
   }, [liegenschaften, selectedId, editingNew]);
@@ -307,7 +308,7 @@ export default function Home() {
         </button>
 
         {/* FAB between Status and Mängel, raised above nav */}
-        {currentLiegenschaft && (
+        {(currentLiegenschaft || (selectedId && liegenschaften.length > 0)) && (
           <button
             onClick={() => setShowAddModal(true)}
             className="absolute -top-20 left-1/2 -translate-x-1/2 bg-red-600 text-white p-5 rounded-full shadow-[0_0_20px_rgba(220,38,38,0.5),0_0_40px_rgba(220,38,38,0.25)] border-[6px] border-white active:scale-90 transition-all z-30 hover:shadow-[0_0_25px_rgba(220,38,38,0.6),0_0_50px_rgba(220,38,38,0.3)]"
