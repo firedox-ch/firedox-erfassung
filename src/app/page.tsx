@@ -434,8 +434,101 @@ function InfoTab({
   maengel: Mangel[];
   begehungen: Begehung[];
 }) {
+  const [viewBegehung, setViewBegehung] = useState<Begehung | null>(null);
   const openMaengel = maengel.filter((m) => m.status === "Offen").length;
   const okAssets = assets.filter((a) => a.status === "OK").length;
+
+  if (viewBegehung) {
+    const bAssets = assets.filter((a) => a.begehungId === viewBegehung.id);
+    const bMaengel = maengel.filter((m) => m.begehungId === viewBegehung.id);
+
+    return (
+      <div className="p-4 space-y-4 pb-8 animate-fade-in">
+        <button onClick={() => setViewBegehung(null)} className="flex items-center gap-1 text-gray-400 text-sm font-bold">
+          <ArrowLeft size={16} /> Zurück
+        </button>
+
+        <div className={`p-5 rounded-2xl border ${viewBegehung.status === "Aktiv" ? "bg-green-50 border-green-200" : "bg-white border-gray-100"}`}>
+          <div className="flex justify-between items-start">
+            <div>
+              <h3 className="text-lg font-black text-gray-800">{viewBegehung.typ}</h3>
+              <p className="text-xs text-gray-400 mt-1">{viewBegehung.datum} | {viewBegehung.pruefer || "-"}</p>
+            </div>
+            <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${
+              viewBegehung.status === "Aktiv" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
+            }`}>
+              {viewBegehung.status}
+            </span>
+          </div>
+          {viewBegehung.notizen && <p className="text-sm text-gray-600 mt-3">{viewBegehung.notizen}</p>}
+        </div>
+
+        {/* Stats für diese Begehung */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 text-center">
+            <p className="text-gray-400 text-[10px] font-black uppercase mb-1">Erfasste Assets</p>
+            <p className="text-2xl font-black text-gray-800">{bAssets.length}</p>
+          </div>
+          <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 text-center">
+            <p className="text-gray-400 text-[10px] font-black uppercase mb-1">Erfasste Mängel</p>
+            <p className="text-2xl font-black text-red-600">{bMaengel.length}</p>
+          </div>
+        </div>
+
+        {/* Assets dieser Begehung */}
+        {bAssets.length > 0 && (
+          <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Assets</h3>
+            <div className="space-y-2">
+              {bAssets.map((a) => (
+                <div key={a.id} className="flex items-center gap-3 py-2 border-b border-gray-50 last:border-0">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                    a.status === "OK" ? "bg-green-50 text-green-600" :
+                    a.status === "Mangelhaft" ? "bg-red-50 text-red-600" : "bg-gray-50 text-gray-400"
+                  }`}>
+                    {ASSET_ICONS[a.typ] || <Shield size={14} />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-gray-800 truncate">{a.bezeichnung || a.typ}</p>
+                    <p className="text-[10px] text-gray-400 truncate">{a.ort}{a.geschoss ? `, ${a.geschoss}` : ""}</p>
+                  </div>
+                  <StatusBadge status={a.status} />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Mängel dieser Begehung */}
+        {bMaengel.length > 0 && (
+          <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Mängel</h3>
+            <div className="space-y-2">
+              {bMaengel.map((m) => (
+                <div key={m.id} className="flex items-center gap-3 py-2 border-b border-gray-50 last:border-0">
+                  <PrioBadge prio={m.prioritaet} small />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-gray-800 truncate">{m.titel}</p>
+                    <p className="text-[10px] text-gray-400 truncate">{m.ort}{m.geschoss ? `, ${m.geschoss}` : ""}</p>
+                  </div>
+                  <span className={`text-[10px] font-bold ${m.status === "Offen" ? "text-red-500" : "text-green-500"}`}>
+                    {m.status}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {bAssets.length === 0 && bMaengel.length === 0 && (
+          <div className="text-center text-gray-400 mt-8">
+            <ClipboardCheck size={32} className="mx-auto mb-2 text-gray-300" />
+            <p className="font-bold text-sm">Keine Einträge für diese Begehung</p>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 space-y-4 pb-8 animate-fade-in">
@@ -474,19 +567,30 @@ function InfoTab({
         <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
           <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Begehungen</h3>
           <div className="space-y-2">
-            {begehungen.map((b) => (
-              <div key={b.id} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
-                <div>
-                  <p className="text-sm font-bold text-gray-800">{b.typ}</p>
-                  <p className="text-[10px] text-gray-400">{b.datum} | {b.pruefer || "-"}</p>
+            {begehungen.map((b) => {
+              const bAssetCount = assets.filter((a) => a.begehungId === b.id).length;
+              const bMangelCount = maengel.filter((m) => m.begehungId === b.id).length;
+              return (
+                <div key={b.id} onClick={() => setViewBegehung(b)}
+                  className="flex items-center justify-between py-3 px-1 border-b border-gray-50 last:border-0 cursor-pointer hover:bg-gray-50 rounded-lg transition-colors active:scale-[0.98]">
+                  <div>
+                    <p className="text-sm font-bold text-gray-800">{b.typ}</p>
+                    <p className="text-[10px] text-gray-400">{b.datum} | {b.pruefer || "-"}</p>
+                    <p className="text-[10px] text-gray-300 mt-0.5">
+                      {bAssetCount} Assets, {bMangelCount} Mängel
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${
+                      b.status === "Aktiv" ? "bg-green-50 text-green-600" : "bg-gray-100 text-gray-500"
+                    }`}>
+                      {b.status}
+                    </span>
+                    <ChevronRight size={16} className="text-gray-300" />
+                  </div>
                 </div>
-                <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${
-                  b.status === "Aktiv" ? "bg-green-50 text-green-600" : "bg-gray-100 text-gray-500"
-                }`}>
-                  {b.status}
-                </span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
