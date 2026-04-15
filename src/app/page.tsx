@@ -62,6 +62,14 @@ const GESCHOSS_OPTIONS = [
 
 type Tab = "dashboard" | "maengel" | "liegenschaft";
 
+const EMPTY_FORM: Omit<Liegenschaft, "id" | "createdAt" | "updatedAt"> = {
+  name: "", strasse: "", plz: "", ort: "", gebaeudeart: "",
+  baujahr: "", anzahlGeschosse: "", anzahlEinheiten: "",
+  eigentuemer: "", verwalter: "",
+  begehungsDatum: new Date().toISOString().split("T")[0],
+  pruefer: "", notizen: "",
+};
+
 export default function Home() {
   const [activeTab, setActiveTab] = useState<Tab>("liegenschaft");
   const [showAddModal, setShowAddModal] = useState(false);
@@ -69,11 +77,12 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [liegenschaftSaved, setLiegenschaftSaved] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [editingNew, setEditingNew] = useState(false);
 
   // Live queries
   const liegenschaften = useLiveQuery(() => db.liegenschaften.toArray()) ?? [];
-  const currentLiegenschaft = liegenschaften[0] ?? null;
+  const currentLiegenschaft = liegenschaften.find(l => l.id === selectedId) ?? null;
   const maengel =
     useLiveQuery(async (): Promise<Mangel[]> => {
       if (!currentLiegenschaft) return [];
@@ -84,25 +93,18 @@ export default function Home() {
         .sortBy("createdAt");
     }, [currentLiegenschaft?.id]) ?? [];
 
-  const [liegenschaftForm, setLiegenschaftForm] = useState<Omit<Liegenschaft, "id" | "createdAt" | "updatedAt">>({
-    name: "",
-    strasse: "",
-    plz: "",
-    ort: "",
-    gebaeudeart: "",
-    baujahr: "",
-    anzahlGeschosse: "",
-    anzahlEinheiten: "",
-    eigentuemer: "",
-    verwalter: "",
-    begehungsDatum: new Date().toISOString().split("T")[0],
-    pruefer: "",
-    notizen: "",
-  });
+  const [liegenschaftForm, setLiegenschaftForm] = useState<Omit<Liegenschaft, "id" | "createdAt" | "updatedAt">>({ ...EMPTY_FORM });
 
-  // Load existing Liegenschaft data into form
+  // Auto-select first Liegenschaft if none selected
   useEffect(() => {
-    if (currentLiegenschaft) {
+    if (!selectedId && liegenschaften.length > 0 && !editingNew) {
+      setSelectedId(liegenschaften[0].id);
+    }
+  }, [liegenschaften, selectedId, editingNew]);
+
+  // Load selected Liegenschaft data into form
+  useEffect(() => {
+    if (currentLiegenschaft && !editingNew) {
       setLiegenschaftForm({
         name: currentLiegenschaft.name,
         strasse: currentLiegenschaft.strasse,
@@ -118,9 +120,8 @@ export default function Home() {
         pruefer: currentLiegenschaft.pruefer,
         notizen: currentLiegenschaft.notizen,
       });
-      setLiegenschaftSaved(true);
     }
-  }, [currentLiegenschaft]);
+  }, [currentLiegenschaft, editingNew]);
 
   // Register service worker
   useEffect(() => {
@@ -134,21 +135,21 @@ export default function Home() {
     if (!liegenschaftForm.name || !liegenschaftForm.strasse) return;
     setSaving(true);
     try {
-      if (currentLiegenschaft) {
+      if (currentLiegenschaft && !editingNew) {
         await db.liegenschaften.update(currentLiegenschaft.id, {
           ...liegenschaftForm,
           updatedAt: new Date().toISOString(),
         });
       } else {
+        const newId = uuid();
         await db.liegenschaften.add({
-          id: uuid(),
+          id: newId,
           ...liegenschaftForm,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         });
-      }
-      setLiegenschaftSaved(true);
-      if (!currentLiegenschaft) {
+        setSelectedId(newId);
+        setEditingNew(false);
         setTimeout(() => setActiveTab("dashboard"), 300);
       }
     } finally {
@@ -180,17 +181,27 @@ export default function Home() {
     }
   };
 
-  const handleNewLiegenschaft = async () => {
-    if (!confirm("Neue Liegenschaft anlegen? Die aktuelle bleibt in der Datenbank gespeichert.")) return;
-    setLiegenschaftForm({
-      name: "", strasse: "", plz: "", ort: "", gebaeudeart: "",
-      baujahr: "", anzahlGeschosse: "", anzahlEinheiten: "",
-      eigentuemer: "", verwalter: "",
-      begehungsDatum: new Date().toISOString().split("T")[0],
-      pruefer: "", notizen: "",
-    });
-    setLiegenschaftSaved(false);
+  const handleNewLiegenschaft = () => {
+    setLiegenschaftForm({ ...EMPTY_FORM });
+    setEditingNew(true);
+    setSelectedId(null);
     setActiveTab("liegenschaft");
+  };
+
+  const handleSelectLiegenschaft = (id: string) => {
+    setSelectedId(id);
+    setEditingNew(false);
+    setActiveTab("dashboard");
+  };
+
+  const handleDeleteLiegenschaft = async (id: string) => {
+    if (!confirm("Liegenschaft und alle zugehörigen Mängel löschen?")) return;
+    await db.maengel.where("liegenschaftId").equals(id).delete();
+    await db.liegenschaften.delete(id);
+    if (selectedId === id) {
+      setSelectedId(null);
+      setEditingNew(false);
+    }
   };
 
   // Stats
@@ -248,10 +259,13 @@ export default function Home() {
             setForm={setLiegenschaftForm}
             onSave={saveLiegenschaft}
             saving={saving}
-            saved={liegenschaftSaved}
-            isNew={!currentLiegenschaft}
+            isEditing={editingNew || !!currentLiegenschaft}
+            isNew={editingNew || !currentLiegenschaft}
             onNewLiegenschaft={handleNewLiegenschaft}
-            hasExisting={!!currentLiegenschaft}
+            liegenschaften={liegenschaften}
+            selectedId={selectedId}
+            onSelect={handleSelectLiegenschaft}
+            onDelete={handleDeleteLiegenschaft}
           />
         )}
         {activeTab === "dashboard" && (
@@ -337,19 +351,25 @@ function LiegenschaftTab({
   setForm,
   onSave,
   saving,
-  saved,
+  isEditing,
   isNew,
   onNewLiegenschaft,
-  hasExisting,
+  liegenschaften,
+  selectedId,
+  onSelect,
+  onDelete,
 }: {
   form: Omit<Liegenschaft, "id" | "createdAt" | "updatedAt">;
   setForm: React.Dispatch<React.SetStateAction<typeof form>>;
   onSave: () => void;
   saving: boolean;
-  saved: boolean;
+  isEditing: boolean;
   isNew: boolean;
   onNewLiegenschaft: () => void;
-  hasExisting: boolean;
+  liegenschaften: Liegenschaft[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  onDelete: (id: string) => void;
 }) {
   const update = (field: string, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -357,20 +377,58 @@ function LiegenschaftTab({
 
   return (
     <div className="p-4 space-y-4 pb-8 animate-fade-in">
+      {/* Liegenschafts-Liste */}
+      {liegenschaften.length > 0 && (
+        <div>
+          <div className="flex justify-between items-center mb-3">
+            <h2 className="text-lg font-black text-gray-800">Liegenschaften</h2>
+            <button
+              onClick={onNewLiegenschaft}
+              className="text-xs bg-red-600 text-white font-bold flex items-center gap-1 px-3 py-1.5 rounded-lg"
+            >
+              <Plus size={14} /> Neue
+            </button>
+          </div>
+          <div className="space-y-2 mb-6">
+            {liegenschaften.map((l) => (
+              <div
+                key={l.id}
+                className={`bg-white p-4 rounded-2xl border flex items-center gap-3 cursor-pointer transition-all active:scale-[0.98] ${
+                  selectedId === l.id ? "border-red-400 shadow-md" : "border-gray-100 shadow-sm"
+                }`}
+              >
+                <div className="flex-1 min-w-0" onClick={() => onSelect(l.id)}>
+                  <p className="font-bold text-sm text-gray-800 truncate">{l.name}</p>
+                  <p className="text-[10px] text-gray-400 truncate">
+                    {l.strasse}, {l.plz} {l.ort}
+                    {l.begehungsDatum ? ` | ${l.begehungsDatum}` : ""}
+                  </p>
+                </div>
+                {selectedId === l.id && (
+                  <span className="text-[8px] bg-red-50 text-red-600 px-2 py-0.5 rounded-full font-bold uppercase">Aktiv</span>
+                )}
+                <button
+                  onClick={(e) => { e.stopPropagation(); onDelete(l.id); }}
+                  className="p-1.5 text-gray-300 hover:text-red-500 transition-colors"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Formular */}
+      {(isEditing || liegenschaften.length === 0) && (
       <div className="flex justify-between items-center">
         <h2 className="text-lg font-black text-gray-800">
-          {isNew ? "Neue Liegenschaft" : "Liegenschaft"}
+          {isNew ? "Neue Liegenschaft" : "Liegenschaft bearbeiten"}
         </h2>
-        {hasExisting && !isNew && (
-          <button
-            onClick={onNewLiegenschaft}
-            className="text-xs text-gray-400 font-bold flex items-center gap-1"
-          >
-            <Plus size={14} /> Neue
-          </button>
-        )}
       </div>
+      )}
 
+      {(isEditing || liegenschaften.length === 0) && (<>
       <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 space-y-4">
         <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
           Stammdaten
@@ -446,8 +504,9 @@ function LiegenschaftTab({
         className="w-full py-4 bg-red-600 text-white font-black rounded-2xl shadow-xl shadow-red-200 active:scale-95 transition-all text-sm uppercase tracking-widest disabled:opacity-50 flex items-center justify-center gap-2"
       >
         <Save size={18} />
-        {saving ? "Speichere..." : saved ? "Aktualisieren" : "Liegenschaft Speichern"}
+        {saving ? "Speichere..." : isNew ? "Liegenschaft Speichern" : "Aktualisieren"}
       </button>
+      </>)}
     </div>
   );
 }
