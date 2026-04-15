@@ -1,4 +1,4 @@
-const CACHE_NAME = 'firedox-erfassung-v2';
+const CACHE_NAME = 'firedox-erfassung-v3';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
@@ -10,7 +10,7 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS))
   );
-  self.skipWaiting();
+  // Do NOT skipWaiting here - wait for user to confirm update
 });
 
 self.addEventListener('activate', (event) => {
@@ -39,7 +39,7 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-// Notify clients when a new version is available
+// Skip waiting only when user clicks "update"
 self.addEventListener('message', (event) => {
   if (event.data === 'SKIP_WAITING') {
     self.skipWaiting();

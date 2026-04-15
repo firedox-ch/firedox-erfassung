@@ -121,7 +121,23 @@ export default function Home() {
   // Register service worker + detect updates
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
+
+    // Detect when a new SW takes over (regardless of how)
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (!refreshing) {
+        refreshing = true;
+        window.location.reload();
+      }
+    });
+
     navigator.serviceWorker.register("/sw.js").then((reg) => {
+      // If there's already a waiting worker, show update
+      if (reg.waiting) {
+        setUpdateAvailable(true);
+        return;
+      }
+
       reg.addEventListener("updatefound", () => {
         const newWorker = reg.installing;
         if (!newWorker) return;
@@ -132,7 +148,8 @@ export default function Home() {
         });
       });
     });
-    // Also check periodically (every 30min)
+
+    // Check for updates periodically (every 30min)
     const interval = setInterval(() => {
       navigator.serviceWorker.getRegistration().then((reg) => reg?.update());
     }, 30 * 60 * 1000);
@@ -143,7 +160,6 @@ export default function Home() {
     navigator.serviceWorker.getRegistration().then((reg) => {
       reg?.waiting?.postMessage("SKIP_WAITING");
     });
-    window.location.reload();
   };
 
   // --- Handlers ---
